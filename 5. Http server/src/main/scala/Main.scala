@@ -5,6 +5,7 @@ import akka.http.scaladsl.server.Directives._
 import akka.stream.ActorMaterializer
 import net.liftweb.json.Serialization.write
 import net.liftweb.json._
+import java.util.UUID.randomUUID
 
 import scala.io.Source
 
@@ -63,8 +64,43 @@ object Main {
               }
             }
           }
+        } ~
+          post {
+            extractRequest {
+              request => {
+                val bodyJSON = extractJSON(request.entity)
+                val restaurantDataParsed = decodeRestaurantData(bodyJSON)
+                val restaurant = createRestaurant(restaurantDataParsed)
+                val restaurants = getRestaurants()
+                val restaurantsList = decodeRestaurants(restaurants)
+                val restaurantListAppended = restaurantsList :+ restaurant
+                complete(HttpEntity(ContentTypes.`application/json`, encodeRestaurants(restaurantListAppended.toList)))
+              }
+            }
+          }
+      } ~
+        path("api" / "restaurant" / Segment) {
+          uuid: String => {
+            extractRequest {
+              request => {
+                println(uuid)
+                val bodyJSON = extractJSON(request.entity)
+                val restaurantDataParsed = decodeRestaurantData(bodyJSON)
+                val restaurants = getRestaurants()
+                val restaurantsList = decodeRestaurants(restaurants)
+                var restaurantsMapped: Array[Restaurant] = restaurantsList.map(x => {
+                  if (x.uuid == uuid) {
+                    new Restaurant(uuid = uuid, data = restaurantDataParsed)
+                  } else {
+                    x
+                  }
+                })
+
+                complete(HttpEntity(ContentTypes.`application/json`, encodeRestaurants(restaurantsMapped.toList)))
+              }
+            }
+          }
         }
-      }
 
     val bindingFuture = Http().bindAndHandle(route, "0.0.0.0", 4000)
 
@@ -84,9 +120,29 @@ object Main {
     result.toArray
   }
 
+  def decodeRestaurantData(restaurantsText: String) = {
+    implicit val formats = DefaultFormats
+    val jValue = parse(restaurantsText)
+    val result = jValue.extract[RestaurantData]
+    result
+  }
+
   def encodeRestaurants(restaurants: List[Restaurant]) = {
     implicit val formats = DefaultFormats
     val jsonString = write(restaurants)
     jsonString
   }
+
+  def extractJSON(httpEntity: HttpEntity): String = {
+    val entityText = httpEntity.toString
+    return entityText.substring(35, entityText.length - 1)
+  }
+
+
+  def createRestaurant(restaurantData: RestaurantData): Restaurant = {
+    val id = randomUUID().toString
+    return new Restaurant(uuid = id, data = restaurantData)
+  }
+
+
 }
