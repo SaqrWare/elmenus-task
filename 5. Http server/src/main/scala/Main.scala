@@ -6,6 +6,7 @@ import akka.stream.ActorMaterializer
 import net.liftweb.json.Serialization.write
 import net.liftweb.json._
 import java.util.UUID.randomUUID
+import akka.http.scaladsl.server._
 
 import scala.io.Source
 
@@ -68,13 +69,18 @@ object Main {
           post {
             extractRequest {
               request => {
-                val bodyJSON = extractJSON(request.entity)
-                val restaurantDataParsed = decodeRestaurantData(bodyJSON)
-                val restaurant = createRestaurant(restaurantDataParsed)
-                val restaurants = getRestaurants()
-                val restaurantsList = decodeRestaurants(restaurants)
-                val restaurantListAppended = restaurantsList :+ restaurant
-                complete(HttpEntity(ContentTypes.`application/json`, encodeRestaurants(restaurantListAppended.toList)))
+                // Validate data
+                try {
+                  val bodyJSON = extractJSON(request.entity)
+                  val restaurantDataParsed = decodeRestaurantData(bodyJSON)
+                  val restaurant = createRestaurant(restaurantDataParsed)
+                  val restaurants = getRestaurants()
+                  val restaurantsList = decodeRestaurants(restaurants)
+                  val restaurantListAppended = restaurantsList :+ restaurant
+                  complete(HttpEntity(ContentTypes.`application/json`, encodeRestaurants(restaurantListAppended.toList)))
+                } catch {
+                  case e: Exception => complete(404, HttpEntity(ContentTypes.`application/json`, "{\"error\":\"INVALID_DATA\"}"))
+                }
               }
             }
           }
@@ -83,20 +89,30 @@ object Main {
           uuid: String => {
             extractRequest {
               request => {
-                println(uuid)
-                val bodyJSON = extractJSON(request.entity)
-                val restaurantDataParsed = decodeRestaurantData(bodyJSON)
-                val restaurants = getRestaurants()
-                val restaurantsList = decodeRestaurants(restaurants)
-                var restaurantsMapped: Array[Restaurant] = restaurantsList.map(x => {
-                  if (x.uuid == uuid) {
-                    new Restaurant(uuid = uuid, data = restaurantDataParsed)
+                // Validate data
+                try {
+                  val bodyJSON = extractJSON(request.entity)
+                  val restaurantDataParsed = decodeRestaurantData(bodyJSON)
+                  val restaurants = getRestaurants()
+                  val restaurantsList = decodeRestaurants(restaurants)
+                  var found = false
+                  var restaurantsMapped: Array[Restaurant] = restaurantsList.map(x => {
+                    if (x.uuid == uuid) {
+                      found = true
+                      new Restaurant(uuid = uuid, data = restaurantDataParsed)
+                    } else {
+                      x
+                    }
+                  })
+                  // Check if found restaurant
+                  if (!found) {
+                    complete(404, HttpEntity(ContentTypes.`application/json`, "{\"error\":\"DOC_NOT_FOUND\"}"))
                   } else {
-                    x
+                    complete(HttpEntity(ContentTypes.`application/json`, encodeRestaurants(restaurantsMapped.toList)))
                   }
-                })
-
-                complete(HttpEntity(ContentTypes.`application/json`, encodeRestaurants(restaurantsMapped.toList)))
+                } catch {
+                  case e: Exception => complete(404, HttpEntity(ContentTypes.`application/json`, "{\"error\":\"INVALID_DATA\"}"))
+                }
               }
             }
           }
