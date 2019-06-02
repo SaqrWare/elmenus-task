@@ -7,6 +7,8 @@
 # http://www.scala-sbt.org/release/docs/Getting-Started/Directories.html#configuring-version-control
 
 dist/*
+libraries/
+.idea/
 target/
 lib_managed/
 src_managed/
